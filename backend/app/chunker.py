@@ -15,6 +15,8 @@ def chunk_pages(
                 {
                     "document": page["document"],
                     "page": page["page"],
+                    # "chunk_id": f"{page['page']}_{start}",
+                    "chunk_id": f"{page['document']}_{page['page']}_{start}",
                     "text": chunk_text,
                 }
             )

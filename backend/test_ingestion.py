@@ -4,22 +4,20 @@ from app.pdf_processor import extract_pages
 from app.chunker import chunk_pages
 
 
-DOCUMENTS_DIR = Path(__file__).parent / "data" / "documents"
+DOCUMENTS_DIR = Path(__file__).parent / "data/documents"
 
 
 def main():
-    pdf_files = list(DOCUMENTS_DIR.glob("*.pdf"))
+    pdf_path = DOCUMENTS_DIR / "experian-credit-guide.pdf"
 
-    if not pdf_files:
-        print(f"No PDF files found in {DOCUMENTS_DIR}")
+    if not pdf_path.exists():
+        print(f"PDF not found: {pdf_path}")
         return
 
-    pdf_path = pdf_files[0]
-
     print(f"Document: {pdf_path.name}")
-    print("-" * 50)
+    print("=" * 60)
 
-    # Step 1: Extract PDF pages
+    # Extract PDF pages
     pages = extract_pages(pdf_path)
 
     print(f"Pages extracted: {len(pages)}")
@@ -28,13 +26,13 @@ def main():
         print("No text was extracted from the PDF.")
         return
 
-    # Step 2: Split pages into chunks
+    # Create chunks
     chunks = chunk_pages(pages)
 
     print(f"Chunks created: {len(chunks)}")
-    print("-" * 50)
+    print("=" * 60)
 
-    # Step 3: Display a few chunks
+    # Display first 3 chunks
     for chunk in chunks[:3]:
         print("\n--- Chunk ---")
         print(f"Document: {chunk['document']}")
@@ -45,4 +43,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
