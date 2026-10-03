@@ -76,11 +76,24 @@ def add_chunks(chunks: list[dict]) -> None:
         for chunk in chunks
     ]
 
-    collection.add(
-        ids=ids,
-        embeddings=embeddings.tolist(),
-        documents=texts,
-        metadatas=metadatas,
+    # collection.add(
+    #     ids=ids,
+    #     embeddings=embeddings.tolist(),
+    #     documents=texts,
+    #     metadatas=metadatas,
+    # )
+    
+    '''
+    Change add() to upsert()
+    Because your ChromaDB is persistent, running the test again with the same chunk_ids 
+    can eventually produce duplicate-ID errors.
+    '''
+
+    collection.upsert(
+    ids=ids,
+    embeddings=embeddings.tolist(),
+    documents=texts,
+    metadatas=metadatas,
     )
 
 

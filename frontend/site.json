@@ -1,0 +1,10 @@
+{
+  "description": "Enables users to upload PDFs and ask questions to receive clear, sourced answers grounded in their documents for efficient enterprise knowledge access.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

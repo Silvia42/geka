@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --geka-background: #f4f6fb;
+  --geka-foreground: #111827;
+  --geka-foreground-soft: #374151;
+  --geka-card: #ffffff;
+  --geka-primary: #2563eb;
+  --geka-primary-hover: #1d4ed8;
+  --geka-primary-foreground: #ffffff;
+  --geka-primary-soft: #eff6ff;
+  --geka-primary-muted: #dbeafe;
+  --geka-primary-subtle: #bfdbfe;
+  --geka-secondary: #eff2fb;
+  --geka-muted: #e8ecf8;
+  --geka-muted-foreground: #6b7280;
+  --geka-subtle-foreground: #9ca3af;
+  --geka-border: #dde3f4;
+  --geka-border-strong: #93c5fd;
+  --geka-surface-subtle: #fafbfe;
+  --geka-overlay: rgb(17 24 39 / 0.4);
+  --geka-scrollbar: #d0ceca;
+  --geka-scrollbar-hover: #b0aea8;
+  --geka-warning-soft: #fef3e2;
+  --geka-warning: #b45309;
+  --geka-error-soft: #fee2e2;
+  --geka-error: #b91c1c;
+}
+
+[data-theme='dark'] {
+  --geka-background: #0b1120;
+  --geka-foreground: #f1f5f9;
+  --geka-foreground-soft: #cbd5e1;
+  --geka-card: #111827;
+  --geka-primary: #60a5fa;
+  --geka-primary-hover: #93c5fd;
+  --geka-primary-foreground: #07111f;
+  --geka-primary-soft: #172554;
+  --geka-primary-muted: #1e3a5f;
+  --geka-primary-subtle: #1e40af;
+  --geka-secondary: #172033;
+  --geka-muted: #202b3d;
+  --geka-muted-foreground: #94a3b8;
+  --geka-subtle-foreground: #64748b;
+  --geka-border: #263449;
+  --geka-border-strong: #3b82f6;
+  --geka-surface-subtle: #0e1728;
+  --geka-overlay: rgb(2 6 23 / 0.72);
+  --geka-scrollbar: #334155;
+  --geka-scrollbar-hover: #475569;
+  --geka-warning-soft: #422c13;
+  --geka-warning: #fbbf24;
+  --geka-error-soft: #451a1a;
+  --geka-error: #fca5a5;
+}
+
+@theme inline {
+  --color-background: var(--geka-background);
+  --color-foreground: var(--geka-foreground);
+  --color-foreground-soft: var(--geka-foreground-soft);
+  --color-card: var(--geka-card);
+  --color-card-foreground: var(--geka-foreground);
+  --color-primary: var(--geka-primary);
+  --color-primary-hover: var(--geka-primary-hover);
+  --color-primary-foreground: var(--geka-primary-foreground);
+  --color-primary-soft: var(--geka-primary-soft);
+  --color-primary-muted: var(--geka-primary-muted);
+  --color-primary-subtle: var(--geka-primary-subtle);
+  --color-secondary: var(--geka-secondary);
+  --color-muted: var(--geka-muted);
+  --color-muted-foreground: var(--geka-muted-foreground);
+  --color-subtle-foreground: var(--geka-subtle-foreground);
+  --color-accent: #14b8a6;
+  --color-accent-foreground: #ffffff;
+  --color-border: var(--geka-border);
+  --color-border-strong: var(--geka-border-strong);
+  --color-surface-subtle: var(--geka-surface-subtle);
+  --color-overlay: var(--geka-overlay);
+  --color-warning-soft: var(--geka-warning-soft);
+  --color-warning: var(--geka-warning);
+  --color-error-soft: var(--geka-error-soft);
+  --color-error: var(--geka-error);
+  --color-ring: var(--geka-primary);
+  --radius: 6px;
+
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--geka-background);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: var(--geka-foreground);
+  -webkit-font-smoothing: antialiased;
+  color-scheme: light;
+}
+
+html:has([data-theme='dark']) {
+  color-scheme: dark;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--geka-scrollbar);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--geka-scrollbar-hover); }
+
+/* Scrollbar hidden by default, visible on hover */
+.scroll-area {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s;
+}
+.scroll-area:hover {
+  scrollbar-color: var(--geka-scrollbar) transparent;
+}
