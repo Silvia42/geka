@@ -27,7 +27,9 @@
 * Connected chat to semantic retrieval and local Ollama answer generation with document and page sources.
 * Added relevance filtering and an insufficient-information response when retrieved evidence is too weak.
 * Connected the frontend PDF upload controls and indexed-document list to the backend.
-* Added backend tests for ingestion, retrieval context, source references, and abstention.
+* Added individual document deletion and clear-all controls with confirmation dialogs; deletion removes ChromaDB records while preserving uploaded PDF files on disk.
+* Styled deletion confirmations to match the GEKA interface in light and dark themes.
+* Added backend tests for ingestion, retrieval context, source references, abstention, and PDF preservation during deletion.
 * Documented Ollama setup and model configuration.
 
 ### Known Limitations

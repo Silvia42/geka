@@ -3,10 +3,91 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app import rag_service
+from fastapi.testclient import TestClient
+
+from app import chroma_store, rag_service
+from app.main import app
 
 
 class RagServiceTests(unittest.TestCase):
+    def test_chroma_remove_document_deletes_matching_chunk_ids(self):
+        with (
+            patch.object(
+                chroma_store.collection,
+                "get",
+                return_value={"ids": ["one", "two"]},
+            ) as get,
+            patch.object(chroma_store.collection, "delete") as delete,
+        ):
+            removed = chroma_store.remove_document("folder/guide.pdf")
+
+        self.assertTrue(removed)
+        get.assert_called_once_with(
+            where={"document": "folder/guide.pdf"}, include=["metadatas"]
+        )
+        delete.assert_called_once_with(ids=["one", "two"])
+
+    def test_chroma_clear_documents_deletes_all_chunk_ids(self):
+        records = {
+            "ids": ["one", "two"],
+            "metadatas": [
+                {"document": "guide.pdf"},
+                {"document": "folder/guide.pdf"},
+            ],
+        }
+        with (
+            patch.object(chroma_store.collection, "get", return_value=records),
+            patch.object(chroma_store.collection, "delete") as delete,
+        ):
+            documents = chroma_store.clear_documents()
+
+        self.assertEqual(documents, ["folder/guide.pdf", "guide.pdf"])
+        delete.assert_called_once_with(ids=["one", "two"])
+
+    def test_delete_document_api_preserves_pdf_on_disk(self):
+        client = TestClient(app)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            stored_file = Path(temp_dir) / "folder" / "guide.pdf"
+            stored_file.parent.mkdir()
+            stored_file.write_bytes(b"original pdf bytes")
+            with (
+                patch.object(rag_service, "DOCUMENTS_DIR", Path(temp_dir)),
+                patch("app.chroma_store.remove_document", return_value=True) as remove,
+            ):
+                response = client.delete(
+                    "/api/document", params={"filename": "folder/guide.pdf"}
+                )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["filename"], "folder/guide.pdf")
+            remove.assert_called_once_with("folder/guide.pdf")
+            self.assertTrue(stored_file.exists())
+            self.assertEqual(stored_file.read_bytes(), b"original pdf bytes")
+
+    def test_clear_documents_api_preserves_all_pdfs_on_disk(self):
+        client = TestClient(app)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = root / "one.pdf"
+            second = root / "folder" / "two.pdf"
+            second.parent.mkdir()
+            first.write_bytes(b"first pdf bytes")
+            second.write_bytes(b"second pdf bytes")
+            with (
+                patch.object(rag_service, "DOCUMENTS_DIR", root),
+                patch(
+                    "app.chroma_store.clear_documents",
+                    return_value=["one.pdf", "folder/two.pdf"],
+                ) as clear,
+            ):
+                response = client.delete("/api/documents")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["documents_deleted"], 2)
+            self.assertTrue(first.exists())
+            self.assertEqual(first.read_bytes(), b"first pdf bytes")
+            self.assertTrue(second.exists())
+            self.assertEqual(second.read_bytes(), b"second pdf bytes")
+            clear.assert_called_once_with()
+
     def test_answer_abstains_when_no_relevant_chunks_are_found(self):
         empty_results = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
         with (
@@ -87,6 +168,44 @@ class RagServiceTests(unittest.TestCase):
     def test_ingest_rejects_path_traversal(self):
         with self.assertRaises(rag_service.DocumentProcessingError):
             rag_service.ingest_pdf("guide.pdf", b"pdf bytes", "../guide.pdf")
+
+    def test_delete_document_removes_index_and_preserves_storage_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            stored_file = Path(temp_dir) / "folder" / "guide.pdf"
+            stored_file.parent.mkdir()
+            stored_file.write_bytes(b"pdf bytes")
+            with (
+                patch.object(rag_service, "DOCUMENTS_DIR", Path(temp_dir)),
+                patch("app.chroma_store.remove_document", return_value=True) as remove,
+            ):
+                self.assertTrue(rag_service.delete_document("folder/guide.pdf"))
+
+            remove.assert_called_once_with("folder/guide.pdf")
+            self.assertTrue(stored_file.exists())
+            self.assertEqual(stored_file.read_bytes(), b"pdf bytes")
+            self.assertTrue(stored_file.parent.exists())
+
+    def test_clear_all_removes_index_and_preserves_all_storage_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = root / "one.pdf"
+            second = root / "folder" / "two.pdf"
+            second.parent.mkdir()
+            first.write_bytes(b"one")
+            second.write_bytes(b"two")
+            with (
+                patch.object(rag_service, "DOCUMENTS_DIR", root),
+                patch(
+                    "app.chroma_store.clear_documents",
+                    return_value=["one.pdf", "folder/two.pdf"],
+                ) as clear,
+            ):
+                deleted_count = rag_service.clear_all_documents()
+
+            self.assertEqual(deleted_count, 2)
+            self.assertEqual(first.read_bytes(), b"one")
+            self.assertEqual(second.read_bytes(), b"two")
+            clear.assert_called_once_with()
 
 
 if __name__ == "__main__":

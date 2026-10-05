@@ -3,6 +3,8 @@ import StatusBadge from './StatusBadge'
 interface DocumentItemProps {
   filename: string
   pages: number
+  onDelete: (filename: string) => void
+  deleting?: boolean
   status?: 'indexed' | 'processing' | 'error'
   active?: boolean
 }
@@ -10,11 +12,13 @@ interface DocumentItemProps {
 export default function DocumentItem({
   filename,
   pages,
+  onDelete,
+  deleting = false,
   status = 'indexed',
   active = false,
 }: DocumentItemProps) {
   return (
-    <button
+    <div
       className={[
         'w-full text-left flex items-start gap-2.5 px-3 py-2.5 rounded-md transition-colors group',
         active
@@ -37,7 +41,29 @@ export default function DocumentItem({
           <StatusBadge label="Indexed" variant={status} />
         </div>
       </div>
-    </button>
+      <button
+        type="button"
+        title={`Delete ${filename}`}
+        aria-label={`Delete ${filename}`}
+        disabled={deleting}
+        onClick={() => onDelete(filename)}
+        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-70 transition-opacity hover:bg-card hover:text-red-600 hover:opacity-100 focus:opacity-100 disabled:cursor-wait disabled:opacity-50"
+      >
+        {deleting ? (
+          <span aria-hidden="true" className="text-xs">...</span>
+        ) : (
+          <TrashIcon />
+        )}
+      </button>
+    </div>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.5 4h11M6 4V2.5h4V4m2.5 0-.7 9H4.2l-.7-9m3 2.2v4.5m3-4.5v4.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 

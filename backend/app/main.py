@@ -6,9 +6,12 @@ from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
 from app.rag_service import (
+    DocumentDeletionError,
     DocumentProcessingError,
     LLMServiceError,
     answer_question,
+    clear_all_documents,
+    delete_document,
     ingest_pdf,
 )
 
@@ -70,6 +73,26 @@ async def get_documents():
     from app.chroma_store import list_documents
 
     return {"documents": await run_in_threadpool(list_documents)}
+
+
+@app.delete("/api/document")
+async def remove_document(filename: str):
+    try:
+        removed = await run_in_threadpool(delete_document, filename)
+    except DocumentDeletionError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if not removed:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    return {"status": "deleted", "filename": filename}
+
+
+@app.delete("/api/documents")
+async def remove_all_documents():
+    try:
+        count = await run_in_threadpool(clear_all_documents)
+    except DocumentDeletionError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+    return {"status": "cleared", "documents_deleted": count}
 
 
 @app.post("/api/chat", response_model=ChatResponse)

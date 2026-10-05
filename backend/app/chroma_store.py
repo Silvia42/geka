@@ -141,3 +141,26 @@ def list_documents() -> list[dict]:
         {"filename": filename, "pages": len(pages)}
         for filename, pages in sorted(documents.items())
     ]
+
+
+def remove_document(document: str) -> bool:
+    records = collection.get(where={"document": document}, include=["metadatas"])
+    if not records["ids"]:
+        return False
+
+    collection.delete(ids=records["ids"])
+    return True
+
+
+def clear_documents() -> list[str]:
+    records = collection.get(include=["metadatas"])
+    documents = sorted(
+        {
+            metadata["document"]
+            for metadata in (records["metadatas"] or [])
+            if metadata and "document" in metadata
+        }
+    )
+    if records["ids"]:
+        collection.delete(ids=records["ids"])
+    return documents

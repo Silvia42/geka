@@ -22,6 +22,10 @@ class LLMServiceError(Exception):
     pass
 
 
+class DocumentDeletionError(Exception):
+    pass
+
+
 def _document_key(filename: str, relative_path: str | None) -> str:
     candidate = relative_path or filename
     if "\\" in candidate:
@@ -73,6 +77,25 @@ def ingest_pdf(
         "chunks_created": len(chunks),
         "bytes_processed": len(contents),
     }
+
+
+def delete_document(document: str) -> bool:
+    document_key = _document_key(Path(document).name, document)
+    from app.chroma_store import remove_document
+
+    try:
+        return remove_document(document_key)
+    except Exception as error:
+        raise DocumentDeletionError("Document index entries could not be removed.") from error
+
+
+def clear_all_documents() -> int:
+    from app.chroma_store import clear_documents
+
+    try:
+        return len(clear_documents())
+    except Exception as error:
+        raise DocumentDeletionError("Document index entries could not be cleared.") from error
 
 
 def _call_ollama(messages: list[dict]) -> str:
