@@ -4,13 +4,14 @@ interface QuestionInputProps {
   value: string
   onChange: (v: string) => void
   onAsk: () => void
+  loading: boolean
 }
 
-export default function QuestionInput({ value, onChange, onAsk }: QuestionInputProps) {
+export default function QuestionInput({ value, onChange, onAsk, loading }: QuestionInputProps) {
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
-      onAsk()
+      if (!loading && value.trim()) onAsk()
     }
   }
 
@@ -33,11 +34,11 @@ export default function QuestionInput({ value, onChange, onAsk }: QuestionInputP
           <CopyButton text={value} label="Copy question" compact />
           <button
             onClick={onAsk}
-            disabled={!value.trim()}
+            disabled={loading || !value.trim()}
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             style={{ fontFamily: 'DM Sans, sans-serif' }}
           >
-            Ask
+            {loading ? 'Asking...' : 'Ask'}
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>

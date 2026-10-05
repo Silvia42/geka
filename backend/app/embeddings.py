@@ -24,7 +24,7 @@ from sentence_transformers import SentenceTransformer
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
-embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+embedding_model = None
 
 
 def create_embeddings(texts: list[str]):
@@ -42,6 +42,10 @@ def create_embeddings(texts: list[str]):
 
     The result contains one numerical vector for each text.
     """
+
+    global embedding_model
+    if embedding_model is None:
+        embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
     return embedding_model.encode(
         texts,

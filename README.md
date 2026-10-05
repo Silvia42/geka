@@ -149,3 +149,96 @@ The `dev` script is defined in `frontend/package.json`.
 **Cause:** Another process may already be using port `8443`.
 
 **Fix:** You can use the port displayed by Vite, or stop the process using port `8443` and restart the development server.
+
+---
+
+## 🚀 Backend — Local Development
+
+The GEKA backend is a Python application built with FastAPI.
+
+### Prerequisites
+
+* Python 3.12
+* `uv`
+* Ollama
+
+The backend uses `uv` for Python environment and dependency management.
+
+The default answer model is `llama3.2:3b`. Download it once with:
+
+```bash
+ollama pull llama3.2:3b
+```
+
+Keep Ollama running while using chat. Set `OLLAMA_MODEL` to use a different installed model, or `OLLAMA_URL` if Ollama is listening at a non-default address.
+
+### Step 1: Open a Terminal
+
+Open a new terminal while keeping the frontend development server running.
+
+### Step 2: Navigate to the Backend
+
+From the GEKA repository root:
+
+```bash
+cd backend
+```
+
+### Step 3: Start the FastAPI Development Server
+
+Run:
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+The `--reload` option automatically restarts the server when backend source files are changed.
+
+The backend will be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+### Step 4: Open the FastAPI Documentation
+
+FastAPI provides an interactive API documentation page at:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Open this URL in a browser to view and test the available API endpoints.
+
+### Frontend and Backend
+
+When developing GEKA locally, both servers should be running:
+
+**Frontend:**
+
+```bash
+cd frontend
+pnpm dev
+```
+
+Available at:
+
+```text
+http://localhost:8443/
+```
+
+**Backend:**
+
+```bash
+cd backend
+uv run uvicorn app.main:app --reload
+```
+
+Available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+The React frontend will communicate with the FastAPI backend through HTTP requests.
+

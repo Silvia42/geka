@@ -4,10 +4,10 @@ import SourceCard from './SourceCard'
 
 interface Source {
   filename: string
-  page: number
+  page?: number
 }
 
-interface Answer {
+export interface Answer {
   question: string
   text: string
   sources: Source[]
@@ -77,16 +77,6 @@ export default function AnswerCard({ answer }: AnswerCardProps) {
         </div>
       </div>
 
-      {/* Grounding attribution */}
-      <div className="flex items-center gap-1.5 mt-3 px-1">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-primary">
-          <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/>
-          <path d="M4 6l1.5 1.5L8 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        <p className="text-[11px] text-subtle-foreground" style={{ fontFamily: 'Inter, sans-serif' }}>
-          Grounded in <strong className="text-primary font-medium">experian-credit-guide.pdf</strong>
-        </p>
-      </div>
     </div>
   )
 }

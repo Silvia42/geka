@@ -2,33 +2,75 @@ import { useState } from "react";
 import Header from "./components/Header";
 import DocumentSidebar from "./components/DocumentSidebar";
 import QuestionInput from "./components/QuestionInput";
-import AnswerCard from "./components/AnswerCard";
+import AnswerCard, { type Answer } from "./components/AnswerCard";
 import EmptyState from "./components/EmptyState";
 import HelpModal from "./components/HelpModal";
 import WelcomePage from "./components/WelcomePage";
 import Disclaimer from "./components/Disclaimer";
 
-const MOCK_ANSWER = {
-  question: "What factors affect a person's credit score?",
-  text: "Several factors can affect a person's credit score, including payment history, amounts owed, length of credit history, types of credit accounts, and recent credit activity. Payment history is typically the most significant factor, as lenders want to know whether you pay your bills on time. The amount of debt you carry relative to your credit limit — known as credit utilization — is also heavily weighted.",
-  sources: [
-    { filename: "experian-credit-guide.pdf", page: 8 },
-    { filename: "experian-credit-guide.pdf", page: 9 },
-  ],
-};
-
 export default function App() {
   const [question, setQuestion] = useState("");
-  const [answered, setAnswered] = useState(true);
+  const [answer, setAnswer] = useState<Answer | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     localStorage.getItem("geka-theme") === "dark" ? "dark" : "light",
   );
   const [helpOpen, setHelpOpen] = useState(false);
   const [page, setPage] = useState<"welcome" | "workspace">("welcome");
+  const [docCount, setDocCount] = useState(0);
 
-  function handleAsk() {
-    if (question.trim()) setAnswered(true);
+  async function handleAsk() {
+    const message = question.trim();
+    if (!message || loading) return;
+
+    setLoading(true);
+    setError(null);
+    setAnswer(null);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, history: [] }),
+      });
+      if (!response.ok) {
+        throw new Error(`Chat request failed (${response.status})`);
+      }
+
+      const data: unknown = await response.json();
+        if (
+        !data || typeof data !== "object" ||
+        !("answer" in data) || typeof data.answer !== "string" ||
+          !("sources" in data) || !Array.isArray(data.sources)
+      ) {
+        throw new Error("Invalid chat response");
+      }
+
+        const sources = data.sources.map((source: unknown) => {
+          if (typeof source === "string") return { filename: source };
+          if (
+            source && typeof source === "object" &&
+            "filename" in source && typeof source.filename === "string" &&
+            (!("page" in source) || typeof source.page === "number")
+          ) {
+            const page = "page" in source && typeof source.page === "number" ? source.page : undefined;
+            return { filename: source.filename, ...(page !== undefined ? { page } : {}) };
+          }
+          throw new Error("Invalid source in chat response");
+        });
+
+      setAnswer({
+        question: message,
+        text: data.answer,
+          sources,
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to reach GEKA");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleThemeChange(nextTheme: "light" | "dark") {
@@ -51,7 +93,7 @@ export default function App() {
       ) : (
         <>
           <Header
-            docCount={1}
+            docCount={docCount}
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
             theme={theme}
             onThemeChange={handleThemeChange}
@@ -75,7 +117,7 @@ export default function App() {
                 sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
               ].join(" ")}
             >
-              <DocumentSidebar />
+              <DocumentSidebar onDocumentsChange={setDocCount} />
             </aside>
 
             {/* Main content */}
@@ -104,11 +146,14 @@ export default function App() {
                 </div>
 
                 {/* Question input */}
-                <QuestionInput value={question} onChange={setQuestion} onAsk={handleAsk} />
+                <QuestionInput value={question} onChange={setQuestion} onAsk={handleAsk} loading={loading} />
 
                 {/* Answer or empty state */}
                 <div className="mt-8 pb-10">
-                  {answered ? <AnswerCard answer={MOCK_ANSWER} /> : <EmptyState />}
+                  {loading && <p role="status" className="text-muted-foreground">Preparing answer...</p>}
+                  {error && <p role="alert" className="text-foreground">{error}</p>}
+                  {answer && <AnswerCard answer={answer} />}
+                  {!loading && !error && !answer && <EmptyState />}
                 </div>
               </div>
               <Disclaimer />

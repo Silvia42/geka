@@ -58,6 +58,9 @@ def add_chunks(chunks: list[dict]) -> None:
         3. Associated with its source metadata.
     """
 
+    if not chunks:
+        return
+
     texts = [chunk["text"] for chunk in chunks]
 
     # Create an embedding for every chunk.
@@ -90,11 +93,22 @@ def add_chunks(chunks: list[dict]) -> None:
     '''
 
     collection.upsert(
-    ids=ids,
-    embeddings=embeddings.tolist(),
-    documents=texts,
-    metadatas=metadatas,
+        ids=ids,
+        embeddings=embeddings.tolist(),
+        documents=texts,
+        metadatas=metadatas,
     )
+
+
+def replace_document(chunks: list[dict], document: str) -> None:
+    existing = collection.get(where={"document": document}, include=["metadatas"])
+    new_ids = {str(chunk["chunk_id"]) for chunk in chunks}
+
+    add_chunks(chunks)
+
+    stale_ids = [chunk_id for chunk_id in existing["ids"] if chunk_id not in new_ids]
+    if stale_ids:
+        collection.delete(ids=stale_ids)
 
 
 def search_chunks(query: str, n_results: int = 3):
@@ -113,3 +127,17 @@ def search_chunks(query: str, n_results: int = 3):
     )
 
     return results
+
+
+def list_documents() -> list[dict]:
+    records = collection.get(include=["metadatas"])
+    documents: dict[str, set[int]] = {}
+
+    for metadata in records["metadatas"] or []:
+        if metadata:
+            documents.setdefault(metadata["document"], set()).add(int(metadata["page"]))
+
+    return [
+        {"filename": filename, "pages": len(pages)}
+        for filename, pages in sorted(documents.items())
+    ]

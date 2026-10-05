@@ -3,7 +3,7 @@ from pathlib import Path
 from pypdf import PdfReader
 
 
-def extract_pages(pdf_path: Path) -> list[dict]:
+def extract_pages(pdf_path: Path, document_name: str | None = None) -> list[dict]:
     """Extract text from a PDF while preserving page metadata."""
     reader = PdfReader(pdf_path)
 
@@ -15,7 +15,7 @@ def extract_pages(pdf_path: Path) -> list[dict]:
         if text.strip():
             pages.append(
                 {
-                    "document": pdf_path.name,
+                    "document": document_name or pdf_path.name,
                     "page": page_number,
                     "text": text.strip(),
                 }

@@ -1,6 +1,6 @@
 interface SourceCardProps {
   filename: string
-  page: number
+  page?: number
   index: number
 }
 
@@ -28,9 +28,9 @@ export default function SourceCard({ filename, page, index }: SourceCardProps) {
         <p className="text-xs font-medium text-foreground truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
           {filename}
         </p>
-        <p className="text-[11px] text-muted-foreground mt-0.5" style={{ fontFamily: 'DM Mono, monospace' }}>
+        {page !== undefined && <p className="text-[11px] text-muted-foreground mt-0.5" style={{ fontFamily: 'DM Mono, monospace' }}>
           Page {page}
-        </p>
+        </p>}
       </div>
 
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-shrink-0 text-subtle-foreground group-hover:text-primary transition-colors">

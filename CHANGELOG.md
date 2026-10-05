@@ -22,4 +22,16 @@
 * Configured frontend formatting with Oxfmt.
 * Configured Python formatting with Black.
 * Added local development documentation.
+* Connected PDF uploads to document storage, text extraction, chunking, embedding generation, and ChromaDB indexing.
+* Added indexed-document listing and document replacement during re-upload.
+* Connected chat to semantic retrieval and local Ollama answer generation with document and page sources.
+* Added relevance filtering and an insufficient-information response when retrieved evidence is too weak.
+* Connected the frontend PDF upload controls and indexed-document list to the backend.
+* Added backend tests for ingestion, retrieval context, source references, and abstention.
+* Documented Ollama setup and model configuration.
+
+### Known Limitations
+
+* Scanned PDFs are not supported because OCR is not implemented.
+* Generated answers can still include claims that are not fully supported by retrieved text; citations should be checked against their source pages.
 
