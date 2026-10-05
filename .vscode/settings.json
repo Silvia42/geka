@@ -1,0 +1,25 @@
+{
+    "oxc.enable.oxfmt": true,
+    "oxc.path.oxfmt": "./frontend/node_modules/.bin/oxfmt",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+    },
+    "[javascript]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+    },
+    "[javascriptreact]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+    },
+    "[json]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+    }
+}

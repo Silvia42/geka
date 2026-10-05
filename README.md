@@ -242,3 +242,38 @@ http://127.0.0.1:8000
 
 The React frontend will communicate with the FastAPI backend through HTTP requests.
 
+## 🦙 Local LLM Dependency: Ollama Core Engine
+
+GEKA v1.0.0 operates as a **100% offline, privacy-first application**. It relies on **Ollama** running locally on your machine to execute the text-generation portion of the RAG pipeline. 
+
+The Python backend does *not* automatically start the LLM service; **Ollama must be running independently as a local background daemon** before launching the GEKA server.
+
+---
+
+### 1. Download & Installation
+If you do not have Ollama installed on your machine yet, download the native binary directly from the official portal:
+* **Official Website:** [Ollama.ai](https://ollama.com)
+* **Platform Support:** Download the standard **macOS client**. (It supports pre-compiled execution targets on Intel `x86_64` architectures).
+* **Setup:** Drag the extracted application file directly into your Mac's `/Applications/` folder and run it once to complete the system installation.
+
+### 2. How to Run the Core Service
+Ollama is designed to register as a persistent background utility. 
+* **Automatic Launch:** By default, Ollama initializes itself silently every time your computer boots up. You will see the small Ollama icon sitting in your Mac's top menu bar.
+* **Manual Trigger:** If the background agent is not running, simply open your computer's Applications directory and double-click the **Ollama app icon** to wake up the engine.
+
+### 3. How to Verify the Local Service Path
+Before running a chat query through the GEKA frontend canvas, you can instantly verify that the local AI server is awake and listening:
+
+#### Option A: The Quick Web Browser Test
+Open your browser and navigate to the default local port address:
+```text
+http://localhost:11434/
+```
+* **Expected Working Output:** The page will display a single plain text string: `Ollama is running`.
+
+#### Option B: The System Terminal Test
+Open your terminal window and verify your local model weights library is accessible:
+```bash
+ollama list
+```
+*This command should output your active local model inventory matrix (e.g., `llama3`, `mistral`, or `phi3`). Ensure your chosen model name exactly matches the model configuration identifier string defined inside your `backend/app/main.py` file.*

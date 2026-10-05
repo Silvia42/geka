@@ -1,21 +1,29 @@
-# Python
-__pycache__/
+# Python Environment
+**/__pycache__/
 *.py[cod]
+backend/.venv/
 .venv/
 venv/
 
 # Environment variables
 .env
 
-# Node
+# Node Dependencies
+frontend/node_modules/
 node_modules/
 
-# Build
+# Local Vector Databases (GEKA Specific)
+backend/chroma_db/
+*.sqlite3
+
+# Build & Previews
+frontend/dist/
 dist/
 build/
 
-# OS
+# OS Specific
 .DS_Store
 
-# IDE
-.vscode/
+# IDE Configurations
+# Commented out so the custom Oxc format-on-save rules sync to GitHub!
+# .vscode/
