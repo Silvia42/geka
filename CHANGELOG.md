@@ -31,9 +31,14 @@
 * Styled deletion confirmations to match the GEKA interface in light and dark themes.
 * Added backend tests for ingestion, retrieval context, source references, abstention, and PDF preservation during deletion.
 * Documented Ollama setup and model configuration.
+* Made source tiles open document previews at the cited PDF page, with retrieved passages displayed alongside the document.
+* Added light/dark preview dialogs with loading and error states, keyboard dismissal, and a link to open the PDF in a separate tab.
+* Added a read-only PDF preview endpoint with path validation; previewing does not modify files on disk.
+* Added backend tests for PDF preview serving, unsafe-path rejection, missing files, and retrieved source excerpts.
 
 ### Known Limitations
 
 * Scanned PDFs are not supported because OCR is not implemented.
 * Generated answers can still include claims that are not fully supported by retrieved text; citations should be checked against their source pages.
+* Embedded PDF rendering and cited-page navigation depend on browser PDF-viewer support. Previews show retrieved passages rather than highlighting exact answer sentences within the PDF.
 

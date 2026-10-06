@@ -2,6 +2,7 @@ import os
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
@@ -12,6 +13,7 @@ from app.rag_service import (
     answer_question,
     clear_all_documents,
     delete_document,
+    get_document_path,
     ingest_pdf,
 )
 
@@ -84,6 +86,23 @@ async def remove_document(filename: str):
     if not removed:
         raise HTTPException(status_code=404, detail="Document not found.")
     return {"status": "deleted", "filename": filename}
+
+
+@app.get("/api/document/preview")
+def preview_document(filename: str):
+    try:
+        path = get_document_path(filename)
+    except DocumentProcessingError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="PDF file not found.") from error
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=path.name,
+        content_disposition_type="inline",
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @app.delete("/api/documents")

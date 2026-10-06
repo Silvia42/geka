@@ -40,31 +40,39 @@ export default function App() {
       }
 
       const data: unknown = await response.json();
-        if (
-        !data || typeof data !== "object" ||
-        !("answer" in data) || typeof data.answer !== "string" ||
-          !("sources" in data) || !Array.isArray(data.sources)
+      if (
+        !data ||
+        typeof data !== "object" ||
+        !("answer" in data) ||
+        typeof data.answer !== "string" ||
+        !("sources" in data) ||
+        !Array.isArray(data.sources)
       ) {
         throw new Error("Invalid chat response");
       }
 
-        const sources = data.sources.map((source: unknown) => {
-          if (typeof source === "string") return { filename: source };
-          if (
-            source && typeof source === "object" &&
-            "filename" in source && typeof source.filename === "string" &&
-            (!("page" in source) || typeof source.page === "number")
-          ) {
-            const page = "page" in source && typeof source.page === "number" ? source.page : undefined;
-            return { filename: source.filename, ...(page !== undefined ? { page } : {}) };
-          }
-          throw new Error("Invalid source in chat response");
-        });
+      const sources = data.sources.map((source: unknown) => {
+        if (typeof source === "string") return { filename: source };
+        if (
+          source &&
+          typeof source === "object" &&
+          "filename" in source &&
+          typeof source.filename === "string" &&
+          (!("page" in source) || typeof source.page === "number")
+        ) {
+          const page =
+            "page" in source && typeof source.page === "number" ? source.page : undefined;
+          const excerpt =
+            "excerpt" in source && typeof source.excerpt === "string" ? source.excerpt : undefined;
+          return { filename: source.filename, ...(page !== undefined ? { page } : {}), excerpt };
+        }
+        throw new Error("Invalid source in chat response");
+      });
 
       setAnswer({
         question: message,
         text: data.answer,
-          sources,
+        sources,
       });
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to reach GEKA");
@@ -146,12 +154,25 @@ export default function App() {
                 </div>
 
                 {/* Question input */}
-                <QuestionInput value={question} onChange={setQuestion} onAsk={handleAsk} loading={loading} />
+                <QuestionInput
+                  value={question}
+                  onChange={setQuestion}
+                  onAsk={handleAsk}
+                  loading={loading}
+                />
 
                 {/* Answer or empty state */}
                 <div className="mt-8 pb-10">
-                  {loading && <p role="status" className="text-muted-foreground">Preparing answer...</p>}
-                  {error && <p role="alert" className="text-foreground">{error}</p>}
+                  {loading && (
+                    <p role="status" className="text-muted-foreground">
+                      Preparing answer...
+                    </p>
+                  )}
+                  {error && (
+                    <p role="alert" className="text-foreground">
+                      {error}
+                    </p>
+                  )}
                   {answer && <AnswerCard answer={answer} />}
                   {!loading && !error && !answer && <EmptyState />}
                 </div>

@@ -79,6 +79,17 @@ def ingest_pdf(
     }
 
 
+def get_document_path(document: str) -> Path:
+    document_key = _document_key(document, None)
+    root = DOCUMENTS_DIR.resolve()
+    path = root.joinpath(*PurePosixPath(document_key).parts).resolve()
+    if root not in path.parents:
+        raise DocumentProcessingError("Document path is invalid.")
+    if not path.is_file():
+        raise FileNotFoundError(document_key)
+    return path
+
+
 def delete_document(document: str) -> bool:
     document_key = _document_key(Path(document).name, document)
     from app.chroma_store import remove_document
@@ -86,7 +97,9 @@ def delete_document(document: str) -> bool:
     try:
         return remove_document(document_key)
     except Exception as error:
-        raise DocumentDeletionError("Document index entries could not be removed.") from error
+        raise DocumentDeletionError(
+            "Document index entries could not be removed."
+        ) from error
 
 
 def clear_all_documents() -> int:
@@ -95,7 +108,9 @@ def clear_all_documents() -> int:
     try:
         return len(clear_documents())
     except Exception as error:
-        raise DocumentDeletionError("Document index entries could not be cleared.") from error
+        raise DocumentDeletionError(
+            "Document index entries could not be cleared."
+        ) from error
 
 
 def _call_ollama(messages: list[dict]) -> str:
@@ -161,7 +176,9 @@ def answer_question(message: str, history: list[dict] | None = None) -> dict:
         key = (filename, page)
         if key not in source_ids:
             source_ids[key] = len(sources) + 1
-            sources.append({"filename": filename, "page": page})
+            sources.append({"filename": filename, "page": page, "excerpt": text})
+        else:
+            sources[source_ids[key] - 1]["excerpt"] += f"\n\n{text}"
         source_id = source_ids[key]
         context_parts.append(
             f"[Source {source_id}]\nDocument: {filename}\nPage: {page}\n{text}"

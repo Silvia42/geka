@@ -10,6 +10,32 @@ from app.main import app
 
 
 class RagServiceTests(unittest.TestCase):
+    def test_preview_serves_nested_pdf_without_modifying_it(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pdf = root / "folder" / "guide.pdf"
+            pdf.parent.mkdir()
+            pdf.write_bytes(b"%PDF-1.4\npreview fixture")
+            with patch.object(rag_service, "DOCUMENTS_DIR", root):
+                response = TestClient(app).get(
+                    "/api/document/preview", params={"filename": "folder/guide.pdf"}
+                )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["content-type"], "application/pdf")
+            self.assertIn("inline", response.headers["content-disposition"])
+            self.assertEqual(response.content, pdf.read_bytes())
+
+    def test_preview_rejects_unsafe_paths_and_missing_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.object(rag_service, "DOCUMENTS_DIR", Path(temp_dir)):
+                client = TestClient(app)
+                for filename in ["../outside.pdf", "/outside.pdf", "guide.txt"]:
+                    with self.subTest(filename=filename):
+                        response = client.get("/api/document/preview", params={"filename": filename})
+                        self.assertEqual(response.status_code, 400)
+                response = client.get("/api/document/preview", params={"filename": "missing.pdf"})
+                self.assertEqual(response.status_code, 404)
+
     def test_chroma_remove_document_deletes_matching_chunk_ids(self):
         with (
             patch.object(
@@ -125,8 +151,8 @@ class RagServiceTests(unittest.TestCase):
         self.assertEqual(
             result["sources"],
             [
-                {"filename": "guide.pdf", "page": 2},
-                {"filename": "guide.pdf", "page": 3},
+                {"filename": "guide.pdf", "page": 2, "excerpt": "First passage"},
+                {"filename": "guide.pdf", "page": 3, "excerpt": "Second passage"},
             ],
         )
         messages = generate.call_args.args[0]
