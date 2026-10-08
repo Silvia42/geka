@@ -36,11 +36,13 @@
 * Added a read-only PDF preview endpoint with path validation; previewing does not modify files on disk.
 * Added backend tests for PDF preview serving, unsafe-path rejection, missing files, and retrieved source excerpts.
 * Added regression tests for insufficient evidence after retrieval, relevance filtering, consecutive chat responses, independent indexed-document listing, and structured Ollama response validation.
+* Added tests for supporting-page selection, citation renumbering, duplicate page excerpts, answers without inline citations, and invalid source references.
 
 ### Fixed
 
 * Prevented retrieved documents from appearing as supporting sources when Ollama reports insufficient evidence, using an explicit internal evidence-status field while preserving the public API and retrieval threshold.
 * Hid the answer-specific Sources section when no sources are returned, preserving indexed-document management and PDF source previews.
+* Restricted answer sources to document pages selected as direct supporting evidence using validated model-selected source IDs; excluded unused retrieved pages, rejected invalid source references, and kept citation numbers aligned with the displayed sources.
 
 ### Known Limitations
 

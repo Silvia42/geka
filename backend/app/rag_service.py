@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import uuid
@@ -126,8 +127,17 @@ def _call_ollama(messages: list[dict]) -> dict:
                 "properties": {
                     "answer": {"type": "string"},
                     "has_sufficient_evidence": {"type": "boolean"},
+                    "supporting_source_ids": {
+                        "type": "array",
+                        "items": {"type": "integer", "minimum": 1},
+                        "uniqueItems": True,
+                    },
                 },
-                "required": ["answer", "has_sufficient_evidence"],
+                "required": [
+                    "answer",
+                    "has_sufficient_evidence",
+                    "supporting_source_ids",
+                ],
                 "additionalProperties": False,
             },
             "options": {"temperature": 0},
@@ -158,11 +168,17 @@ def _call_ollama(messages: list[dict]) -> dict:
         or not isinstance(result.get("answer"), str)
         or not result["answer"].strip()
         or not isinstance(result.get("has_sufficient_evidence"), bool)
+        or not isinstance(result.get("supporting_source_ids"), list)
+        or any(
+            type(source_id) is not int or source_id < 1
+            for source_id in result["supporting_source_ids"]
+        )
     ):
         raise LLMServiceError("Ollama returned an invalid grounded answer.")
     return {
         "answer": result["answer"].strip(),
         "has_sufficient_evidence": result["has_sufficient_evidence"],
+        "supporting_source_ids": result["supporting_source_ids"],
     }
 
 
@@ -220,7 +236,12 @@ def answer_question(message: str, history: list[dict] | None = None) -> dict:
         "information missing from one excerpt is missing from the entire document set. "
         "If the supplied evidence is insufficient to answer the question, clearly state "
         "that the available documents do not contain enough information to answer it. "
-        "Return a JSON object with an answer string and a has_sufficient_evidence boolean. "
+        "Return a JSON object with an answer string, a has_sufficient_evidence boolean, "
+        "and a supporting_source_ids array of source marker numbers. Include only sources "
+        "whose supplied excerpts directly support facts stated in your answer. Do not "
+        "include a source merely because it discusses the same topic. Every factual "
+        "statement must be supported by one of the selected excerpts. If no excerpts "
+        "support an answer, return an empty supporting_source_ids array. "
         "Set has_sufficient_evidence to false if the excerpts cannot answer the question, "
         "even if they are related to the topic. Set it to true only when the answer is "
         "directly supported by the excerpts. "
@@ -251,4 +272,27 @@ def answer_question(message: str, history: list[dict] | None = None) -> dict:
     )
     if not result["has_sufficient_evidence"]:
         return {"answer": INSUFFICIENT_INFORMATION_ANSWER, "sources": []}
-    return {"answer": result["answer"], "sources": sources}
+
+    supporting_ids = sorted(set(result["supporting_source_ids"]))
+    if not supporting_ids or any(
+        source_id > len(sources) for source_id in supporting_ids
+    ):
+        raise LLMServiceError("Ollama returned invalid supporting sources.")
+    source_numbers = {
+        source_id: index + 1 for index, source_id in enumerate(supporting_ids)
+    }
+    citation_pattern = r"\[Source ([0-9]+)\]"
+    cited_ids = {
+        int(source_id) for source_id in re.findall(citation_pattern, result["answer"])
+    }
+    if not cited_ids.issubset(source_numbers):
+        raise LLMServiceError("Ollama cited a source that does not support the answer.")
+    answer = re.sub(
+        citation_pattern,
+        lambda match: f"[Source {source_numbers[int(match.group(1))]}]",
+        result["answer"],
+    )
+    return {
+        "answer": answer,
+        "sources": [sources[source_id - 1] for source_id in supporting_ids],
+    }

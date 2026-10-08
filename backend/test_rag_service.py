@@ -142,7 +142,11 @@ class RagServiceTests(unittest.TestCase):
             patch("app.chroma_store.search_chunks", return_value=results),
             patch(
                 "app.rag_service._call_ollama",
-                return_value={"answer": refusal, "has_sufficient_evidence": False},
+                return_value={
+                    "answer": refusal,
+                    "has_sufficient_evidence": False,
+                    "supporting_source_ids": [],
+                },
             ),
         ):
             result = rag_service.answer_question("What is the CEO's favorite color?")
@@ -168,9 +172,16 @@ class RagServiceTests(unittest.TestCase):
 
     def test_chat_api_clears_sources_after_supported_answer_and_keeps_documents(self):
         results = {
-            "documents": [["Employees receive health insurance."]],
-            "metadatas": [[{"document": "guide.pdf", "page": 2}]],
-            "distances": [[0.2]],
+            "documents": [
+                ["Employees receive health insurance.", "Office hours are 9 to 5."]
+            ],
+            "metadatas": [
+                [
+                    {"document": "guide.pdf", "page": 2},
+                    {"document": "unrelated.pdf", "page": 1},
+                ]
+            ],
+            "distances": [[0.2, 0.3]],
         }
         documents = [
             {"filename": "guide.pdf", "pages": 3},
@@ -180,10 +191,12 @@ class RagServiceTests(unittest.TestCase):
             {
                 "answer": "Employees receive health insurance. [Source 1]",
                 "has_sufficient_evidence": True,
+                "supporting_source_ids": [1],
             },
             {
                 "answer": "The excerpts do not establish the CEO's favorite color.",
                 "has_sufficient_evidence": False,
+                "supporting_source_ids": [],
             },
         ]
         with (
@@ -224,6 +237,7 @@ class RagServiceTests(unittest.TestCase):
                 generated = {
                     "answer": "A grounded answer or an explanation of missing evidence.",
                     "has_sufficient_evidence": sufficient,
+                    "supporting_source_ids": [1] if sufficient else [],
                 }
                 body = {"message": {"content": json.dumps(generated)}}
                 with patch("app.rag_service.urllib.request.urlopen") as request:
@@ -236,7 +250,8 @@ class RagServiceTests(unittest.TestCase):
                 payload = json.loads(request.call_args.args[0].data)
                 self.assertEqual(payload["format"]["type"], "object")
                 self.assertEqual(
-                    payload["format"]["required"], ["answer", "has_sufficient_evidence"]
+                    payload["format"]["required"],
+                    ["answer", "has_sufficient_evidence", "supporting_source_ids"],
                 )
 
     def test_ollama_rejects_missing_or_invalid_evidence_status(self):
@@ -245,6 +260,17 @@ class RagServiceTests(unittest.TestCase):
             json.dumps({"answer": "Answer"}),
             json.dumps({"answer": "Answer", "has_sufficient_evidence": "false"}),
             json.dumps({"answer": " ", "has_sufficient_evidence": True}),
+            json.dumps({"answer": "Answer", "has_sufficient_evidence": True}),
+            *[
+                json.dumps(
+                    {
+                        "answer": "Answer",
+                        "has_sufficient_evidence": True,
+                        "supporting_source_ids": source_ids,
+                    }
+                )
+                for source_ids in [None, "1", [True], [0], [-1], [1.5], ["1"]]
+            ],
         ]:
             with self.subTest(content=content):
                 body = {"message": {"content": content}}
@@ -274,6 +300,7 @@ class RagServiceTests(unittest.TestCase):
                 return_value={
                     "answer": "Answer [Source 1]",
                     "has_sufficient_evidence": True,
+                    "supporting_source_ids": [1],
                 },
             ) as generate,
         ):
@@ -286,7 +313,6 @@ class RagServiceTests(unittest.TestCase):
             result["sources"],
             [
                 {"filename": "guide.pdf", "page": 2, "excerpt": "First passage"},
-                {"filename": "guide.pdf", "page": 3, "excerpt": "Second passage"},
             ],
         )
         messages = generate.call_args.args[0]
@@ -298,6 +324,126 @@ class RagServiceTests(unittest.TestCase):
         )
         self.assertEqual(messages[-2], {"role": "user", "content": "Earlier question"})
         self.assertNotIn("Unrelated passage", messages[-1]["content"])
+
+    def test_answer_selects_supporting_pages_and_renumbers_citations(self):
+        results = {
+            "documents": [
+                [
+                    "Office hours are 9 to 5.",
+                    "Annual salary is $50,000.",
+                    "Employees receive health insurance.",
+                    "Salaries are paid monthly.",
+                ]
+            ],
+            "metadatas": [
+                [
+                    {"document": "guide.pdf", "page": 1},
+                    {"document": "pay.pdf", "page": 8},
+                    {"document": "guide.pdf", "page": 2},
+                    {"document": "pay.pdf", "page": 8},
+                ]
+            ],
+            "distances": [[0.1, 0.2, 0.3, 0.4]],
+        }
+        with (
+            patch("app.chroma_store.search_chunks", return_value=results),
+            patch(
+                "app.rag_service._call_ollama",
+                return_value={
+                    "answer": "Health insurance [Source 3]; $50,000 annually [Source 2].",
+                    "has_sufficient_evidence": True,
+                    "supporting_source_ids": [3, 2, 2],
+                },
+            ),
+        ):
+            result = rag_service.answer_question("What are the salary and benefits?")
+
+        self.assertEqual(
+            result["answer"],
+            "Health insurance [Source 2]; $50,000 annually [Source 1].",
+        )
+        self.assertEqual(
+            result["sources"],
+            [
+                {
+                    "filename": "pay.pdf",
+                    "page": 8,
+                    "excerpt": "Annual salary is $50,000.\n\nSalaries are paid monthly.",
+                },
+                {
+                    "filename": "guide.pdf",
+                    "page": 2,
+                    "excerpt": "Employees receive health insurance.",
+                },
+            ],
+        )
+
+    def test_answer_selects_evidence_without_inline_citation_markers(self):
+        results = {
+            "documents": [["Leave is discussed here.", "Annual leave is 20 days."]],
+            "metadatas": [
+                [
+                    {"document": "guide.pdf", "page": 1},
+                    {"document": "guide.pdf", "page": 8},
+                ]
+            ],
+            "distances": [[0.1, 0.2]],
+        }
+        with (
+            patch("app.chroma_store.search_chunks", return_value=results),
+            patch(
+                "app.rag_service._call_ollama",
+                return_value={
+                    "answer": "20 days",
+                    "has_sufficient_evidence": True,
+                    "supporting_source_ids": [2],
+                },
+            ),
+        ):
+            result = rag_service.answer_question("How many days of annual leave?")
+
+        self.assertEqual(result["answer"], "20 days")
+        self.assertEqual(
+            result["sources"],
+            [
+                {
+                    "filename": "guide.pdf",
+                    "page": 8,
+                    "excerpt": "Annual leave is 20 days.",
+                }
+            ],
+        )
+
+    def test_answer_rejects_missing_unknown_or_inconsistent_supporting_sources(self):
+        results = {
+            "documents": [["First passage", "Second passage"]],
+            "metadatas": [
+                [
+                    {"document": "guide.pdf", "page": 2},
+                    {"document": "guide.pdf", "page": 3},
+                ]
+            ],
+            "distances": [[0.2, 0.3]],
+        }
+        for source_ids, answer in [
+            ([], "Answer"),
+            ([3], "Answer [Source 3]"),
+            ([1], "Answer [Source 2]"),
+        ]:
+            with self.subTest(source_ids=source_ids, answer=answer):
+                with (
+                    patch("app.chroma_store.search_chunks", return_value=results),
+                    patch(
+                        "app.rag_service._call_ollama",
+                        return_value={
+                            "answer": answer,
+                            "has_sufficient_evidence": True,
+                            "supporting_source_ids": source_ids,
+                        },
+                    ),
+                ):
+                    with self.assertRaises(rag_service.LLMServiceError):
+                        rag_service.answer_question("What is covered?")
 
     def test_ingest_persists_and_indexes_a_pdf(self):
         pages = [{"document": "folder/guide.pdf", "page": 1, "text": "Useful text"}]
