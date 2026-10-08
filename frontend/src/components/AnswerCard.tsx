@@ -73,28 +73,32 @@ export default function AnswerCard({ answer }: AnswerCardProps) {
           </p>
         </div>
 
-        <div className="mx-5 mb-2 h-px bg-border" />
+        {answer.sources.length > 0 && (
+          <>
+            <div className="mx-5 mb-2 h-px bg-border" />
 
-        {/* Sources */}
-        <div className="px-5 pb-5 pt-3">
-          <p
-            className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-2.5"
-            style={{ fontFamily: "DM Mono, monospace", letterSpacing: "0.1em" }}
-          >
-            Sources
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {answer.sources.map((s, i) => (
-              <SourceCard
-                key={i}
-                filename={s.filename}
-                page={s.page}
-                excerpt={s.excerpt}
-                index={i + 1}
-              />
-            ))}
-          </div>
-        </div>
+            {/* Sources */}
+            <div className="px-5 pb-5 pt-3">
+              <p
+                className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-2.5"
+                style={{ fontFamily: "DM Mono, monospace", letterSpacing: "0.1em" }}
+              >
+                Sources
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {answer.sources.map((s, i) => (
+                  <SourceCard
+                    key={i}
+                    filename={s.filename}
+                    page={s.page}
+                    excerpt={s.excerpt}
+                    index={i + 1}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

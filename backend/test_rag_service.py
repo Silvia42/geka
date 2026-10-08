@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,9 +32,13 @@ class RagServiceTests(unittest.TestCase):
                 client = TestClient(app)
                 for filename in ["../outside.pdf", "/outside.pdf", "guide.txt"]:
                     with self.subTest(filename=filename):
-                        response = client.get("/api/document/preview", params={"filename": filename})
+                        response = client.get(
+                            "/api/document/preview", params={"filename": filename}
+                        )
                         self.assertEqual(response.status_code, 400)
-                response = client.get("/api/document/preview", params={"filename": "missing.pdf"})
+                response = client.get(
+                    "/api/document/preview", params={"filename": "missing.pdf"}
+                )
                 self.assertEqual(response.status_code, 404)
 
     def test_chroma_remove_document_deletes_matching_chunk_ids(self):
@@ -126,21 +131,150 @@ class RagServiceTests(unittest.TestCase):
         self.assertIn("couldn't find enough information", result["answer"])
         generate.assert_not_called()
 
+    def test_answer_abstains_when_retrieved_evidence_is_insufficient(self):
+        results = {
+            "documents": [["The guide describes employee benefits."]],
+            "metadatas": [[{"document": "guide.pdf", "page": 2}]],
+            "distances": [[0.2]],
+        }
+        refusal = "I couldn't find enough information in the uploaded documents to answer that."
+        with (
+            patch("app.chroma_store.search_chunks", return_value=results),
+            patch(
+                "app.rag_service._call_ollama",
+                return_value={"answer": refusal, "has_sufficient_evidence": False},
+            ),
+        ):
+            result = rag_service.answer_question("What is the CEO's favorite color?")
+
+        self.assertEqual(result["answer"], refusal)
+        self.assertEqual(result["sources"], [])
+
+    def test_answer_abstains_when_all_chunks_exceed_distance_limit(self):
+        results = {
+            "documents": [["Unrelated passage"]],
+            "metadatas": [[{"document": "unrelated.pdf", "page": 1}]],
+            "distances": [[rag_service.MAX_RETRIEVAL_DISTANCE + 0.1]],
+        }
+        with (
+            patch("app.chroma_store.search_chunks", return_value=results),
+            patch("app.rag_service._call_ollama") as generate,
+        ):
+            result = rag_service.answer_question("What is the policy?")
+
+        self.assertEqual(result["sources"], [])
+        self.assertEqual(result["answer"], rag_service.INSUFFICIENT_INFORMATION_ANSWER)
+        generate.assert_not_called()
+
+    def test_chat_api_clears_sources_after_supported_answer_and_keeps_documents(self):
+        results = {
+            "documents": [["Employees receive health insurance."]],
+            "metadatas": [[{"document": "guide.pdf", "page": 2}]],
+            "distances": [[0.2]],
+        }
+        documents = [
+            {"filename": "guide.pdf", "pages": 3},
+            {"filename": "unrelated.pdf", "pages": 1},
+        ]
+        model_responses = [
+            {
+                "answer": "Employees receive health insurance. [Source 1]",
+                "has_sufficient_evidence": True,
+            },
+            {
+                "answer": "The excerpts do not establish the CEO's favorite color.",
+                "has_sufficient_evidence": False,
+            },
+        ]
+        with (
+            patch("app.chroma_store.search_chunks", return_value=results),
+            patch("app.chroma_store.list_documents", return_value=documents),
+            patch("app.rag_service._call_ollama", side_effect=model_responses),
+        ):
+            client = TestClient(app)
+            supported = client.post("/api/chat", json={"message": "What benefits?"})
+            self.assertEqual(supported.status_code, 200)
+            self.assertEqual(supported.json()["answer"], model_responses[0]["answer"])
+            self.assertEqual(
+                supported.json()["sources"],
+                [
+                    {
+                        "filename": "guide.pdf",
+                        "page": 2,
+                        "excerpt": "Employees receive health insurance.",
+                    }
+                ],
+            )
+
+            unsupported = client.post(
+                "/api/chat", json={"message": "What is the CEO's favorite color?"}
+            )
+            self.assertEqual(unsupported.status_code, 200)
+            self.assertEqual(
+                unsupported.json(),
+                {"answer": rag_service.INSUFFICIENT_INFORMATION_ANSWER, "sources": []},
+            )
+            indexed = client.get("/api/documents")
+            self.assertEqual(indexed.status_code, 200)
+            self.assertEqual(indexed.json(), {"documents": documents})
+
+    def test_ollama_requests_and_parses_explicit_evidence_status(self):
+        for sufficient in [True, False]:
+            with self.subTest(sufficient=sufficient):
+                generated = {
+                    "answer": "A grounded answer or an explanation of missing evidence.",
+                    "has_sufficient_evidence": sufficient,
+                }
+                body = {"message": {"content": json.dumps(generated)}}
+                with patch("app.rag_service.urllib.request.urlopen") as request:
+                    request.return_value.__enter__.return_value.read.return_value = (
+                        json.dumps(body).encode("utf-8")
+                    )
+                    result = rag_service._call_ollama([])
+
+                self.assertEqual(result, generated)
+                payload = json.loads(request.call_args.args[0].data)
+                self.assertEqual(payload["format"]["type"], "object")
+                self.assertEqual(
+                    payload["format"]["required"], ["answer", "has_sufficient_evidence"]
+                )
+
+    def test_ollama_rejects_missing_or_invalid_evidence_status(self):
+        for content in [
+            "An unstructured answer",
+            json.dumps({"answer": "Answer"}),
+            json.dumps({"answer": "Answer", "has_sufficient_evidence": "false"}),
+            json.dumps({"answer": " ", "has_sufficient_evidence": True}),
+        ]:
+            with self.subTest(content=content):
+                body = {"message": {"content": content}}
+                with patch("app.rag_service.urllib.request.urlopen") as request:
+                    request.return_value.__enter__.return_value.read.return_value = (
+                        json.dumps(body).encode("utf-8")
+                    )
+                    with self.assertRaises(rag_service.LLMServiceError):
+                        rag_service._call_ollama([])
+
     def test_answer_builds_source_context_before_generation(self):
         results = {
-            "documents": [["First passage", "Second passage"]],
+            "documents": [["First passage", "Second passage", "Unrelated passage"]],
             "metadatas": [
                 [
                     {"document": "guide.pdf", "page": 2},
                     {"document": "guide.pdf", "page": 3},
+                    {"document": "unrelated.pdf", "page": 1},
                 ]
             ],
-            "distances": [[0.2, 0.3]],
+            "distances": [[0.2, 0.3, rag_service.MAX_RETRIEVAL_DISTANCE + 0.1]],
         }
         with (
             patch("app.chroma_store.search_chunks", return_value=results),
             patch(
-                "app.rag_service._call_ollama", return_value="Answer [Source 1]"
+                "app.rag_service._call_ollama",
+                return_value={
+                    "answer": "Answer [Source 1]",
+                    "has_sufficient_evidence": True,
+                },
             ) as generate,
         ):
             result = rag_service.answer_question(

@@ -35,6 +35,12 @@
 * Added light/dark preview dialogs with loading and error states, keyboard dismissal, and a link to open the PDF in a separate tab.
 * Added a read-only PDF preview endpoint with path validation; previewing does not modify files on disk.
 * Added backend tests for PDF preview serving, unsafe-path rejection, missing files, and retrieved source excerpts.
+* Added regression tests for insufficient evidence after retrieval, relevance filtering, consecutive chat responses, independent indexed-document listing, and structured Ollama response validation.
+
+### Fixed
+
+* Prevented retrieved documents from appearing as supporting sources when Ollama reports insufficient evidence, using an explicit internal evidence-status field while preserving the public API and retrieval threshold.
+* Hid the answer-specific Sources section when no sources are returned, preserving indexed-document management and PDF source previews.
 
 ### Known Limitations
 
