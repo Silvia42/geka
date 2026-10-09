@@ -244,11 +244,17 @@ class RagServiceTests(unittest.TestCase):
                     request.return_value.__enter__.return_value.read.return_value = (
                         json.dumps(body).encode("utf-8")
                     )
-                    result = rag_service._call_ollama([])
+                    result = rag_service._call_ollama([], source_count=2)
 
                 self.assertEqual(result, generated)
                 payload = json.loads(request.call_args.args[0].data)
                 self.assertEqual(payload["format"]["type"], "object")
+                self.assertEqual(
+                    payload["format"]["properties"]["supporting_source_ids"]["items"][
+                        "enum"
+                    ],
+                    [1, 2],
+                )
                 self.assertEqual(
                     payload["format"]["required"],
                     ["answer", "has_sufficient_evidence", "supporting_source_ids"],
@@ -269,7 +275,7 @@ class RagServiceTests(unittest.TestCase):
                         "supporting_source_ids": source_ids,
                     }
                 )
-                for source_ids in [None, "1", [True], [0], [-1], [1.5], ["1"]]
+                for source_ids in [None, "1", [True], [0], [-1], [1.5], ["1"], [24]]
             ],
         ]:
             with self.subTest(content=content):
@@ -279,7 +285,7 @@ class RagServiceTests(unittest.TestCase):
                         json.dumps(body).encode("utf-8")
                     )
                     with self.assertRaises(rag_service.LLMServiceError):
-                        rag_service._call_ollama([])
+                        rag_service._call_ollama([], source_count=2)
 
     def test_answer_builds_source_context_before_generation(self):
         results = {
@@ -440,10 +446,106 @@ class RagServiceTests(unittest.TestCase):
                             "has_sufficient_evidence": True,
                             "supporting_source_ids": source_ids,
                         },
-                    ),
+                    ) as generate,
                 ):
                     with self.assertRaises(rag_service.LLMServiceError):
                         rag_service.answer_question("What is covered?")
+                self.assertEqual(generate.call_count, 2)
+
+    def test_chat_retries_pdf_page_number_as_source_id(self):
+        results = {
+            "documents": [["A good score is 670-739.", "Credit scoring overview."]],
+            "metadatas": [
+                [
+                    {"document": "experian-credit-guide.pdf", "page": 24},
+                    {"document": "transunion.pdf", "page": 3},
+                ]
+            ],
+            "distances": [[0.2, 0.3]],
+        }
+        invalid = {
+            "answer": "670-739",
+            "has_sufficient_evidence": True,
+            "supporting_source_ids": [24],
+        }
+        for corrected in [
+            {
+                "answer": "670-739 [Source 1]",
+                "has_sufficient_evidence": True,
+                "supporting_source_ids": [1],
+            },
+            {
+                "answer": "Insufficient evidence.",
+                "has_sufficient_evidence": False,
+                "supporting_source_ids": [],
+            },
+        ]:
+            with self.subTest(sufficient=corrected["has_sufficient_evidence"]):
+                with (
+                    patch("app.chroma_store.search_chunks", return_value=results),
+                    patch("app.rag_service.urllib.request.urlopen") as request,
+                ):
+                    request.return_value.__enter__.return_value.read.side_effect = [
+                        json.dumps({"message": {"content": json.dumps(output)}}).encode(
+                            "utf-8"
+                        )
+                        for output in [invalid, corrected]
+                    ]
+                    response = TestClient(app).post(
+                        "/api/chat", json={"message": "What is good score?"}
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(request.call_count, 2)
+                for call in request.call_args_list:
+                    payload = json.loads(call.args[0].data)
+                    self.assertEqual(
+                        payload["format"]["properties"]["supporting_source_ids"][
+                            "items"
+                        ]["enum"],
+                        [1, 2],
+                    )
+                self.assertIn(
+                    "not PDF page numbers", payload["messages"][-1]["content"]
+                )
+                if corrected["has_sufficient_evidence"]:
+                    self.assertEqual(response.json()["answer"], corrected["answer"])
+                    self.assertEqual(
+                        response.json()["sources"],
+                        [
+                            {
+                                "filename": "experian-credit-guide.pdf",
+                                "page": 24,
+                                "excerpt": "A good score is 670-739.",
+                            }
+                        ],
+                    )
+                else:
+                    self.assertEqual(
+                        response.json(),
+                        {
+                            "answer": rag_service.INSUFFICIENT_INFORMATION_ANSWER,
+                            "sources": [],
+                        },
+                    )
+
+    def test_answer_does_not_retry_ollama_connection_errors(self):
+        results = {
+            "documents": [["A good score is 670-739."]],
+            "metadatas": [[{"document": "experian-credit-guide.pdf", "page": 24}]],
+            "distances": [[0.2]],
+        }
+        with (
+            patch("app.chroma_store.search_chunks", return_value=results),
+            patch(
+                "app.rag_service.urllib.request.urlopen",
+                side_effect=rag_service.urllib.error.URLError("Connection refused"),
+            ) as request,
+        ):
+            with self.assertRaisesRegex(rag_service.LLMServiceError, "Unable to reach"):
+                rag_service.answer_question("What is good score?")
+
+        request.assert_called_once()
 
     def test_ingest_persists_and_indexes_a_pdf(self):
         pages = [{"document": "folder/guide.pdf", "page": 1, "text": "Useful text"}]

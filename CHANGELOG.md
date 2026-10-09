@@ -37,16 +37,20 @@
 * Added backend tests for PDF preview serving, unsafe-path rejection, missing files, and retrieved source excerpts.
 * Added regression tests for insufficient evidence after retrieval, relevance filtering, consecutive chat responses, independent indexed-document listing, and structured Ollama response validation.
 * Added tests for supporting-page selection, citation renumbering, duplicate page excerpts, answers without inline citations, and invalid source references.
+* Added regression coverage for PDF page numbers mistaken for source IDs, successful correction or abstention after retry, bounded retries, and immediate reporting of Ollama connection failures.
 
 ### Fixed
 
 * Prevented retrieved documents from appearing as supporting sources when Ollama reports insufficient evidence, using an explicit internal evidence-status field while preserving the public API and retrieval threshold.
 * Hid the answer-specific Sources section when no sources are returned, preserving indexed-document management and PDF source previews.
 * Restricted answer sources to document pages selected as direct supporting evidence using validated model-selected source IDs; excluded unused retrieved pages, rejected invalid source references, and kept citation numbers aligned with the displayed sources.
+* Fixed chat failures caused by confusing PDF page numbers with source IDs by constraining Ollama's schema to valid source IDs, clarifying the prompt, and retrying invalid generated responses once without relaxing source validation.
 
 ### Known Limitations
 
 * Scanned PDFs are not supported because OCR is not implemented.
 * Generated answers can still include claims that are not fully supported by retrieved text; citations should be checked against their source pages.
+* Retrieval selects the five closest chunks across all indexed documents, without guaranteeing document diversity; a single PDF can dominate the retrieved context.
+* The model may select only one document when multiple documents support the same answer, or include unnecessary pages; source-ID validation checks references, not whether every selected page directly supports the answer.
 * Embedded PDF rendering and cited-page navigation depend on browser PDF-viewer support. Previews show retrieved passages rather than highlighting exact answer sentences within the PDF.
 

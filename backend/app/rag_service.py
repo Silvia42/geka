@@ -26,6 +26,10 @@ class LLMServiceError(Exception):
     pass
 
 
+class InvalidLLMResponseError(LLMServiceError):
+    pass
+
+
 class DocumentDeletionError(Exception):
     pass
 
@@ -117,7 +121,7 @@ def clear_all_documents() -> int:
         ) from error
 
 
-def _call_ollama(messages: list[dict]) -> dict:
+def _call_ollama(messages: list[dict], *, source_count: int) -> dict:
     payload = json.dumps(
         {
             "model": OLLAMA_MODEL,
@@ -129,7 +133,10 @@ def _call_ollama(messages: list[dict]) -> dict:
                     "has_sufficient_evidence": {"type": "boolean"},
                     "supporting_source_ids": {
                         "type": "array",
-                        "items": {"type": "integer", "minimum": 1},
+                        "items": {
+                            "type": "integer",
+                            "enum": list(range(1, source_count + 1)),
+                        },
                         "uniqueItems": True,
                     },
                 },
@@ -162,7 +169,9 @@ def _call_ollama(messages: list[dict]) -> dict:
     try:
         result = json.loads(body["message"]["content"])
     except (KeyError, TypeError, json.JSONDecodeError) as error:
-        raise LLMServiceError("Ollama returned an invalid grounded answer.") from error
+        raise InvalidLLMResponseError(
+            "Ollama returned an invalid grounded answer."
+        ) from error
     if (
         not isinstance(result, dict)
         or not isinstance(result.get("answer"), str)
@@ -170,11 +179,11 @@ def _call_ollama(messages: list[dict]) -> dict:
         or not isinstance(result.get("has_sufficient_evidence"), bool)
         or not isinstance(result.get("supporting_source_ids"), list)
         or any(
-            type(source_id) is not int or source_id < 1
+            type(source_id) is not int or not 1 <= source_id <= source_count
             for source_id in result["supporting_source_ids"]
         )
     ):
-        raise LLMServiceError("Ollama returned an invalid grounded answer.")
+        raise InvalidLLMResponseError("Ollama returned an invalid grounded answer.")
     return {
         "answer": result["answer"].strip(),
         "has_sufficient_evidence": result["has_sufficient_evidence"],
@@ -229,6 +238,7 @@ def answer_question(message: str, history: list[dict] | None = None) -> dict:
         if item.get("role") in {"user", "assistant"}
         and isinstance(item.get("content"), str)
     ]
+    valid_source_ids = list(range(1, len(sources) + 1))
     user_prompt = (
         "Answer the question using only information directly supported by the supplied "
         "document excerpts. Do not use outside knowledge or make assumptions that are not "
@@ -237,7 +247,10 @@ def answer_question(message: str, history: list[dict] | None = None) -> dict:
         "If the supplied evidence is insufficient to answer the question, clearly state "
         "that the available documents do not contain enough information to answer it. "
         "Return a JSON object with an answer string, a has_sufficient_evidence boolean, "
-        "and a supporting_source_ids array of source marker numbers. Include only sources "
+        "and a supporting_source_ids array of source marker numbers. "
+        f"The only valid source IDs are {json.dumps(valid_source_ids)}. "
+        "Use source marker IDs, never PDF page numbers. For example, [Source 1] on "
+        "PDF page 24 has source ID 1, not 24. Include only sources "
         "whose supplied excerpts directly support facts stated in your answer. Do not "
         "include a source merely because it discusses the same topic. Every factual "
         "statement must be supported by one of the selected excerpts. If no excerpts "
@@ -252,47 +265,71 @@ def answer_question(message: str, history: list[dict] | None = None) -> dict:
         f"Document excerpts:\n{'\n\n'.join(context_parts)}\n\n"
         f"Question: {message}"
     )
-    result = _call_ollama(
-        [
-            {
-                "role": "system",
-                "content": (
-                    "You are GEKA, a document-grounded question-answering assistant. "
-                    "Answer questions using only information supported by the supplied document "
-                    "excerpts. Conversation history may provide context for understanding the "
-                    "current question, but it is not a source of factual evidence. Do not use "
-                    "outside knowledge, speculate, or invent facts. If the supplied excerpts "
-                    "do not contain enough evidence to answer the question, clearly state that "
-                    "the available documents do not contain enough information."
-                ),
-            },
-            *safe_history,
-            {"role": "user", "content": user_prompt},
-        ]
-    )
-    if not result["has_sufficient_evidence"]:
-        return {"answer": INSUFFICIENT_INFORMATION_ANSWER, "sources": []}
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are GEKA, a document-grounded question-answering assistant. "
+                "Answer questions using only information supported by the supplied document "
+                "excerpts. Conversation history may provide context for understanding the "
+                "current question, but it is not a source of factual evidence. Do not use "
+                "outside knowledge, speculate, or invent facts. If the supplied excerpts "
+                "do not contain enough evidence to answer the question, clearly state that "
+                "the available documents do not contain enough information."
+            ),
+        },
+        *safe_history,
+        {"role": "user", "content": user_prompt},
+    ]
+    for attempt in range(2):
+        try:
+            result = _call_ollama(messages, source_count=len(sources))
+            if not result["has_sufficient_evidence"]:
+                return {"answer": INSUFFICIENT_INFORMATION_ANSWER, "sources": []}
 
-    supporting_ids = sorted(set(result["supporting_source_ids"]))
-    if not supporting_ids or any(
-        source_id > len(sources) for source_id in supporting_ids
-    ):
-        raise LLMServiceError("Ollama returned invalid supporting sources.")
-    source_numbers = {
-        source_id: index + 1 for index, source_id in enumerate(supporting_ids)
-    }
-    citation_pattern = r"\[Source ([0-9]+)\]"
-    cited_ids = {
-        int(source_id) for source_id in re.findall(citation_pattern, result["answer"])
-    }
-    if not cited_ids.issubset(source_numbers):
-        raise LLMServiceError("Ollama cited a source that does not support the answer.")
-    answer = re.sub(
-        citation_pattern,
-        lambda match: f"[Source {source_numbers[int(match.group(1))]}]",
-        result["answer"],
-    )
-    return {
-        "answer": answer,
-        "sources": [sources[source_id - 1] for source_id in supporting_ids],
-    }
+            supporting_ids = sorted(set(result["supporting_source_ids"]))
+            if not supporting_ids or any(
+                source_id not in valid_source_ids for source_id in supporting_ids
+            ):
+                raise InvalidLLMResponseError(
+                    "Ollama returned invalid supporting sources."
+                )
+            source_numbers = {
+                source_id: index + 1 for index, source_id in enumerate(supporting_ids)
+            }
+            citation_pattern = r"\[Source ([0-9]+)\]"
+            cited_ids = {
+                int(source_id)
+                for source_id in re.findall(citation_pattern, result["answer"])
+            }
+            if not cited_ids.issubset(source_numbers):
+                raise InvalidLLMResponseError(
+                    "Ollama cited a source that does not support the answer."
+                )
+            answer = re.sub(
+                citation_pattern,
+                lambda match: f"[Source {source_numbers[int(match.group(1))]}]",
+                result["answer"],
+            )
+            return {
+                "answer": answer,
+                "sources": [sources[source_id - 1] for source_id in supporting_ids],
+            }
+        except InvalidLLMResponseError as error:
+            if attempt == 1:
+                raise
+            messages = [
+                *messages,
+                {
+                    "role": "user",
+                    "content": (
+                        f"The generated response was invalid: {error} "
+                        "Regenerate the JSON answer using the original question and excerpts. "
+                        f"Valid source marker IDs are {json.dumps(valid_source_ids)}, "
+                        "not PDF page numbers. Cite only selected source IDs. A supported "
+                        "answer needs at least one supporting source ID. If the evidence "
+                        "is insufficient, set has_sufficient_evidence to false and "
+                        "supporting_source_ids to an empty array."
+                    ),
+                },
+            ]
