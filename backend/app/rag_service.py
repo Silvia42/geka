@@ -6,8 +6,12 @@ import urllib.request
 import uuid
 from pathlib import Path, PurePosixPath
 
+from dotenv import load_dotenv
+
 from app.chunker import chunk_pages
 from app.pdf_processor import extract_pages
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 DOCUMENTS_DIR = Path(__file__).parent.parent / "data" / "documents"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")

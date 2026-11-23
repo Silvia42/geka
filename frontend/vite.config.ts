@@ -2,8 +2,14 @@ import { defineConfig, type HtmlTagDescriptor, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
-
 import siteConfiguration from "./site.json";
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const version = readFileSync(
+  resolve(__dirname, '../version.txt'),
+  'utf-8'
+).trim();
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -12,6 +18,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : "/",
+    define: {
+      __APP_VERSION__: JSON.stringify(version),
+    },
     build: {
       sourcemap: emitSourcemaps ? "inline" : false,
       minify: !emitSourcemaps,
@@ -23,6 +32,12 @@ export default defineConfig(({ mode }) => {
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: "/src/**/*.stories.{ts,tsx,js,jsx}" }),
+      {
+        name: "app-version",
+        transformIndexHtml(html) {
+          return html.replace(/__APP_VERSION__/g, version);
+        },
+      },
     ],
     resolve: {
       alias: {

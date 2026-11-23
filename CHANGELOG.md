@@ -1,3 +1,13 @@
+## [v1.1.0] — Apple M4 Compatibility
+
+### Added
+
+* Added frontend version injection from `version.txt`; the generated page title now displays the app version.
+
+### Changed
+
+* Updated project configuration to support running GEKA on a MacBook Pro with an Apple M4 processor.
+
 ## [v1.0.0] — Initial Project Setup
 
 ### Added
